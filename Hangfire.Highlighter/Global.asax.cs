@@ -14,5 +14,14 @@ namespace Hangfire.Highlighter
             AreaRegistration.RegisterAllAreas();
             RouteConfig.RegisterRoutes(RouteTable.Routes);
         }
+        protected void Application_BeginRequest()
+        {
+            StackExchange.Profiling.MiniProfiler.Start();
+        }
+
+        protected void Application_EndRequest()
+        {
+            StackExchange.Profiling.MiniProfiler.Stop();
+        }
     }
 }
