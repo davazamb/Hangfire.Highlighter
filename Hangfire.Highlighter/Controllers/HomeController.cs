@@ -33,16 +33,27 @@ namespace Hangfire.Highlighter.Controllers
         [HttpPost]
         public ActionResult Create([Bind(Include = "SourceCode")] CodeSnippet snippet)
         {
-            if (ModelState.IsValid)
+            try
             {
-                snippet.CreatedAt = DateTime.UtcNow;
+                if (ModelState.IsValid)
+                {
+                    snippet.CreatedAt = DateTime.UtcNow;
 
-                // We'll add the highlighting a bit later.
+                    using (StackExchange.Profiling.MiniProfiler.StepStatic("Service call"))
+                    {
+                        snippet.HighlightedCode = HighlightSource(snippet.SourceCode);
+                        snippet.HighlightedAt = DateTime.UtcNow;
+                    }
 
-                _db.CodeSnippets.Add(snippet);
-                _db.SaveChanges();
+                    _db.CodeSnippets.Add(snippet);
+                    _db.SaveChanges();
 
-                return RedirectToAction("Details", new { id = snippet.Id });
+                    return RedirectToAction("Details", new { id = snippet.Id });
+                }
+            }
+            catch (HttpRequestException)
+            {
+                ModelState.AddModelError("", "Highlighting service returned error. Try again later.");
             }
 
             return View(snippet);
