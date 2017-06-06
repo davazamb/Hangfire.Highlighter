@@ -11,6 +11,21 @@ namespace Hangfire.Highlighter.Controllers
 {
     public class HomeController : Controller
     {
+        // Process a job
+        public static void HighlightSnippet(int snippetId)
+        {
+            using (var db = new HighlighterDbContext())
+            {
+                var snippet = db.CodeSnippets.Find(snippetId);
+                if (snippet == null) return;
+
+                snippet.HighlightedCode = HighlightSource(snippet.SourceCode);
+                snippet.HighlightedAt = DateTime.UtcNow;
+
+                db.SaveChanges();
+            }
+        }
+
         // GET: Home
         private readonly HighlighterDbContext _db = new HighlighterDbContext();
 
@@ -33,31 +48,25 @@ namespace Hangfire.Highlighter.Controllers
         [HttpPost]
         public ActionResult Create([Bind(Include = "SourceCode")] CodeSnippet snippet)
         {
-            try
+            if (ModelState.IsValid)
             {
-                if (ModelState.IsValid)
+                snippet.CreatedAt = DateTime.UtcNow;
+
+                _db.CodeSnippets.Add(snippet);
+                _db.SaveChanges();
+
+                using (StackExchange.Profiling.MiniProfiler.StepStatic("Job enqueue"))
                 {
-                    snippet.CreatedAt = DateTime.UtcNow;
-
-                    using (StackExchange.Profiling.MiniProfiler.StepStatic("Service call"))
-                    {
-                        snippet.HighlightedCode = HighlightSource(snippet.SourceCode);
-                        snippet.HighlightedAt = DateTime.UtcNow;
-                    }
-
-                    _db.CodeSnippets.Add(snippet);
-                    _db.SaveChanges();
-
-                    return RedirectToAction("Details", new { id = snippet.Id });
+                    // Enqueue a job
+                    BackgroundJob.Enqueue(() => HighlightSnippet(snippet.Id));
                 }
-            }
-            catch (HttpRequestException)
-            {
-                ModelState.AddModelError("", "Highlighting service returned error. Try again later.");
+
+                return RedirectToAction("Details", new { id = snippet.Id });
             }
 
             return View(snippet);
         }
+
 
         protected override void Dispose(bool disposing)
         {
