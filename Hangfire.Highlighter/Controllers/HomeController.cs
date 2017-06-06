@@ -2,6 +2,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net.Http;
+using System.Threading.Tasks;
 using System.Web;
 using System.Web.Mvc;
 
@@ -53,6 +55,37 @@ namespace Hangfire.Highlighter.Controllers
                 _db.Dispose();
             }
             base.Dispose(disposing);
+        }
+
+        private static async Task<string> HighlightSourceAsync(string source)
+        {
+            using (var client = new HttpClient())
+            {
+                var response = await client.PostAsync(
+                    @"http://hilite.me/api",
+                    new FormUrlEncodedContent(new Dictionary<string, string>
+                    {
+                    { "lexer", "c#" },
+                    { "style", "vs" },
+                    { "code", source }
+                    }));
+
+                response.EnsureSuccessStatusCode();
+
+                return await response.Content.ReadAsStringAsync();
+            }
+        }
+
+        private static string HighlightSource(string source)
+        {
+            // Microsoft.Net.Http does not provide synchronous API,
+            // so we are using wrapper to perform a sync call.
+            return RunSync(() => HighlightSourceAsync(source));
+        }
+
+        private static TResult RunSync<TResult>(Func<Task<TResult>> func)
+        {
+            return Task.Run<Task<TResult>>(func).Unwrap().GetAwaiter().GetResult();
         }
     }
 }
